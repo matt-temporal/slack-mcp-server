@@ -24,7 +24,9 @@ const (
 	// regardless of the requested limit.
 	threadsPageSize = 10
 	// threadsMaxPages bounds one tool call; the caller continues with the cursor.
-	threadsMaxPages = 50
+	// Pages after the first wait on the Tier3 limiter, so this keeps a worst-case
+	// call well under typical 60s MCP client timeouts.
+	threadsMaxPages = 20
 
 	threadsDefaultLimit   = 20
 	threadsMaxLimit       = 200
@@ -80,8 +82,9 @@ type threadsScan struct {
 	nextCursor   string // "" when the scan is exhausted (no more pages, or the time bound was reached)
 	scanned      int    // threads looked at within the time window, matched or not
 	pages        int
-	hitPageCap   bool // stopped after threadsMaxPages; nextCursor continues the scan
-	hitTimeBound bool // stopped because the next thread's latest activity is older than params.oldest
+	hitPageCap   bool  // stopped after threadsMaxPages; nextCursor continues the scan
+	hitTimeBound bool  // stopped because the next thread's latest activity is older than params.oldest
+	fetchErr     error // a page after the first failed; threads holds what was collected and nextCursor resumes the scan
 }
 
 func (h *ThreadsHandler) ConversationsThreadsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -109,6 +112,10 @@ func (h *ThreadsHandler) ConversationsThreadsHandler(ctx context.Context, reques
 	if err != nil {
 		h.logger.Error("Threads view fetch failed", zap.Error(err))
 		return nil, fmt.Errorf("failed to list threads: %v", err)
+	}
+	if scan.fetchErr != nil {
+		h.logger.Warn("Threads view fetch stopped early, returning partial results",
+			zap.Int("pages", scan.pages), zap.String("cursor", scan.nextCursor), zap.Error(scan.fetchErr))
 	}
 
 	if len(scan.threads) == 0 {
@@ -228,7 +235,15 @@ func collectThreads(ctx context.Context, fetch threadsPageFetcher, params *threa
 	for scan.pages < threadsMaxPages {
 		resp, err := fetch(ctx, cursor)
 		if err != nil {
-			return nil, err
+			if scan.pages == 0 {
+				return nil, err
+			}
+			// Keep what was already collected (e.g. on rate_limited) and let the
+			// caller resume from the page that failed.
+			scan.fetchErr = err
+			scan.hitPageCap = true
+			scan.nextCursor = cursor
+			return scan, nil
 		}
 		scan.pages++
 		if len(resp.Threads) == 0 {

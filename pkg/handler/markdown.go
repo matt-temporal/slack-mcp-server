@@ -20,9 +20,10 @@ import (
 var paragraphMarkdown = goldmark.New(goldmark.WithExtensions(extension.Linkify, extension.Strikethrough))
 
 // slackTokenRe matches Slack's own inline syntax, which CommonMark leaves as text:
-// <@U…>, <#C…>, <!here>, <!subteam^S…> and <url|label> references, and :emoji:.
+// <@U…>, <#C…>, <!here>, <!subteam^S…>, <!date^ts^format[^url]|fallback> and
+// <url|label> references, and :emoji:.
 var slackTokenRe = regexp.MustCompile(
-	`<(@[UW][A-Z0-9]+|#[CG][A-Z0-9]+|!here|!channel|!everyone|!subteam\^[A-Z0-9]+|(?i:https?|mailto):[^|>\s]+)(?:\|([^>]*))?>` +
+	`<(@[UW][A-Z0-9]+|#[CG][A-Z0-9]+|!date\^[0-9]+\^[^|>^]+(?:\^(?i:https?):[^|>\s]+)?|!here|!channel|!everyone|!subteam\^[A-Z0-9]+|(?i:https?|mailto):[^|>\s]+)(?:\|([^>]*))?>` +
 		`|:([a-z0-9_+\-]+):`)
 
 var skinToneRe = regexp.MustCompile(`^:skin-tone-([2-6]):`)
@@ -267,6 +268,8 @@ func slackTokenElement(raw string, loc []int, style slack.RichTextSectionTextSty
 		return slack.NewRichTextSectionUserElement(target[1:], stylePtr(style))
 	case strings.HasPrefix(target, "#"):
 		return slack.NewRichTextSectionChannelElement(target[1:], stylePtr(style))
+	case strings.HasPrefix(target, "!date^"):
+		return dateElement(target, label)
 	case strings.HasPrefix(target, "!subteam^"):
 		return slack.NewRichTextSectionUserGroupElement(strings.TrimPrefix(target, "!subteam^"))
 	case strings.HasPrefix(target, "!"):
@@ -279,6 +282,24 @@ func slackTokenElement(raw string, loc []int, style slack.RichTextSectionTextSty
 			Style: stylePtr(style),
 		}
 	}
+}
+
+// dateElement builds a date element from the target of a <!date^ts^format[^url]|fallback> token.
+func dateElement(target, label string) slack.RichTextSectionElement {
+	parts := strings.SplitN(strings.TrimPrefix(target, "!date^"), "^", 3)
+	ts, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return nil
+	}
+	var url, fallback *string
+	if len(parts) == 3 {
+		url = &parts[2]
+	}
+	if label != "" {
+		f := resolveReferences(label)
+		fallback = &f
+	}
+	return slack.NewRichTextSectionDateElement(ts, parts[1], url, fallback)
 }
 
 // plainText concatenates the text below n; raw keeps code span content as is.

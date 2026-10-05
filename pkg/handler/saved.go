@@ -218,7 +218,7 @@ func (h *SavedHandler) SavedAddHandler(ctx context.Context, request mcp.CallTool
 
 	dateDue := int64(request.GetInt("date_due", 0))
 	if dateDue < 0 {
-		return nil, fmt.Errorf("date_due must be a positive unix timestamp, got %d", dateDue)
+		return nil, fmt.Errorf("date_due must be a non-negative unix timestamp, got %d", dateDue)
 	}
 
 	channelID, ts, err := h.parseSavedItemParams(ctx, request)

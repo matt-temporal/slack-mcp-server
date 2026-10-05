@@ -260,10 +260,10 @@ Clear all completed saved items from the "Save for Later" panel. This is a bulk 
 
 - **Parameters:** None.
 
-### 19. conversations_threads
+### 21. conversations_threads
 List the threads you are subscribed to — Slack's "Threads" view — newest activity first, with each thread's unread reply count and the unread (or latest) replies. By default only threads with unread replies from the last 30 days are returned.
 
-> **Note:** This tool requires browser session tokens (`xoxc`/`xoxd`). It is not available with standard OAuth (`xoxp`) or bot (`xoxb`) tokens. Slack serves this view 10 threads per page, so one call scans at most 500 threads; the last row's `Cursor` column is non-empty when more are available.
+> **Note:** This tool requires browser session tokens (`xoxc`/`xoxd`). It is not available with standard OAuth (`xoxp`) or bot (`xoxb`) tokens. Slack serves this view 10 threads per page, so one call scans at most 200 threads; the last row's `Cursor` column is non-empty when more are available.
 
 - **Parameters:**
   - `filter` (string, default `"unread"`): `"unread"` returns only threads with unread replies; `"all"` returns every subscribed thread in the time window.

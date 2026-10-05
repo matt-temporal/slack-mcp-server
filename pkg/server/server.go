@@ -560,7 +560,7 @@ func NewMCPServer(provider *provider.ApiProvider, logger *zap.Logger, enabledToo
 				mcp.Description("Optional: only threads in this channel or DM, in format Cxxxxxxxxxx / Dxxxxxxxxxx or its name starting with #... or @..."),
 			),
 			mcp.WithString("since",
-				mcp.Description("How far back to look, by a thread's latest activity: a duration like 1d, 7d, 2w, 1m (d=days, w=weeks, m=months; default 30d), or 'all' for no time bound. One call scans at most 500 threads; continue with the cursor for more."),
+				mcp.Description("How far back to look, by a thread's latest activity: a duration like 1d, 7d, 2w, 1m (d=days, w=weeks, m=months; default 30d), or 'all' for no time bound. One call scans at most 200 threads; continue with the cursor for more."),
 				mcp.DefaultString("30d"),
 			),
 			mcp.WithNumber("limit",
@@ -579,29 +579,32 @@ func NewMCPServer(provider *provider.ApiProvider, logger *zap.Logger, enabledToo
 
 	// Register saved items tools — "Save for Later" panel management.
 	// Requires browser session tokens (xoxc/xoxd); not available for bot or OAuth tokens.
-	if !provider.IsBotToken() && !provider.IsOAuth() && shouldAddTool(ToolSavedList, enabledTools, "") {
+	// Each tool is gated on its own name so e.g. SLACK_MCP_ENABLED_TOOLS=saved_add works without saved_list.
+	if !provider.IsBotToken() && !provider.IsOAuth() {
 		savedHandler := handler.NewSavedHandler(provider, logger, conversationsHandler)
-		s.AddTool(mcp.NewTool(ToolSavedList,
-			mcp.WithDescription("List saved items from Slack's 'Save for Later' panel. Returns items the user has saved, with optional message content. Replaces the deprecated stars.list API. Requires browser session tokens (xoxc/xoxd)."),
-			mcp.WithTitleAnnotation("List Saved Items"),
-			mcp.WithReadOnlyHintAnnotation(true),
-			mcp.WithString("filter",
-				mcp.Description("Filter saved items: 'saved' (active/in-progress, default), 'completed' (marked done), 'archived'."),
-				mcp.DefaultString("saved"),
-			),
-			mcp.WithNumber("limit",
-				mcp.Description("Maximum number of items to return. Auto-paginates. Default is 50."),
-				mcp.DefaultNumber(50),
-			),
-			mcp.WithBoolean("include_messages",
-				mcp.Description("If true (default), fetches the actual saved message content. If false, returns metadata only."),
-				mcp.DefaultBool(true),
-			),
-			mcp.WithNumber("max_messages_per_item",
-				mcp.Description("Max messages to fetch per saved item (for thread replies). Default is 5."),
-				mcp.DefaultNumber(5),
-			),
-		), savedHandler.SavedListHandler)
+		if shouldAddTool(ToolSavedList, enabledTools, "") {
+			s.AddTool(mcp.NewTool(ToolSavedList,
+				mcp.WithDescription("List saved items from Slack's 'Save for Later' panel. Returns items the user has saved, with optional message content. Replaces the deprecated stars.list API. Requires browser session tokens (xoxc/xoxd)."),
+				mcp.WithTitleAnnotation("List Saved Items"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithString("filter",
+					mcp.Description("Filter saved items: 'saved' (active/in-progress, default), 'completed' (marked done), 'archived'."),
+					mcp.DefaultString("saved"),
+				),
+				mcp.WithNumber("limit",
+					mcp.Description("Maximum number of items to return. Auto-paginates. Default is 50."),
+					mcp.DefaultNumber(50),
+				),
+				mcp.WithBoolean("include_messages",
+					mcp.Description("If true (default), fetches the actual saved message content. If false, returns metadata only."),
+					mcp.DefaultBool(true),
+				),
+				mcp.WithNumber("max_messages_per_item",
+					mcp.Description("Max messages to fetch per saved item (for thread replies). Default is 5."),
+					mcp.DefaultNumber(5),
+				),
+			), savedHandler.SavedListHandler)
+		}
 
 		if shouldAddTool(ToolSavedAdd, enabledTools, "") {
 			s.AddTool(mcp.NewTool(ToolSavedAdd,
@@ -625,7 +628,7 @@ func NewMCPServer(provider *provider.ApiProvider, logger *zap.Logger, enabledToo
 
 		if shouldAddTool(ToolSavedDelete, enabledTools, "") {
 			s.AddTool(mcp.NewTool(ToolSavedDelete,
-				mcp.WithDescription("Remove a message from Slack's 'Save for Later' panel (unsave). Use item_id and ts values from saved_list output. Replaces the deprecated stars.remove API. Requires browser session tokens (xoxc/xoxd)."),
+				mcp.WithDescription("Remove a message from Slack's 'Save for Later' panel (unsave). Pass the item_id value from saved_list output as channel_id, plus its ts. Replaces the deprecated stars.remove API. Requires browser session tokens (xoxc/xoxd)."),
 				mcp.WithTitleAnnotation("Remove Saved Message"),
 				mcp.WithDestructiveHintAnnotation(true),
 				mcp.WithIdempotentHintAnnotation(true),

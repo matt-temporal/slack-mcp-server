@@ -164,3 +164,20 @@ func TestUnitMarkdownParagraphsShareBlock(t *testing.T) {
 		assert.Falsef(t, isSection, "block %d is a mrkdwn section, which Slack collapses", i)
 	}
 }
+
+// TestUnitMarkdownParagraphDate keeps Slack's <!date^…> token working now that
+// paragraphs are rich_text rather than mrkdwn: it becomes a date element.
+func TestUnitMarkdownParagraphDate(t *testing.T) {
+	blocks, err := markdownToBlocks("Due <!date^1392734382^{date_short} at {time}|Feb 18, 2014> and " +
+		"<!date^1392734382^{date_num}^https://example.com/x|2014-02-18>")
+	require.NoError(t, err)
+	require.Len(t, blocks, 1)
+
+	fallback1, fallback2, url := "Feb 18, 2014", "2014-02-18", "https://example.com/x"
+	assert.Equal(t, []slack.RichTextSectionElement{
+		plain("Due "),
+		slack.NewRichTextSectionDateElement(1392734382, "{date_short} at {time}", nil, &fallback1),
+		plain(" and "),
+		slack.NewRichTextSectionDateElement(1392734382, "{date_num}", &url, &fallback2),
+	}, paragraphSection(t, blocks[0]))
+}

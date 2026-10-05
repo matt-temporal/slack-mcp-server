@@ -157,6 +157,17 @@ func TestUnitCollectThreads(t *testing.T) {
 		assert.Contains(t, err.Error(), "not_allowed_token_type")
 	})
 
+	t.Run("fetch error after the first page returns partial results", func(t *testing.T) {
+		// Only page 1 is served; fetching page 2 fails.
+		p := &fakePager{pages: map[string]edge.ThreadsViewResponse{"": page1}}
+		scan, err := collectThreads(ctx, p.fetch, &threadsParams{filter: threadsFilterAll, limit: 20})
+		require.NoError(t, err)
+		require.Error(t, scan.fetchErr)
+		assert.Len(t, scan.threads, 4)
+		assert.True(t, scan.hitPageCap)
+		assert.Equal(t, "1700000600.000000", scan.nextCursor)
+	})
+
 	t.Run("page cap: stops with a cursor to continue", func(t *testing.T) {
 		// Endless view: every page has one read thread and says has_more.
 		endless := &fakePager{pages: map[string]edge.ThreadsViewResponse{}}

@@ -220,7 +220,7 @@ func TestUnitSavedAddHandlerValidation(t *testing.T) {
 		{
 			name:    "negative date_due",
 			args:    map[string]any{"channel_id": "C092WJP9Z38", "ts": "1772034406.593509", "date_due": -5},
-			wantErr: "date_due must be a positive unix timestamp",
+			wantErr: "date_due must be a non-negative unix timestamp",
 		},
 	}
 
